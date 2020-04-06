@@ -1,0 +1,47 @@
+#!/bin/bash
+# install-nfs-server - Installs the network file system package. The script then starts and enables the service, and provides feedback to the user that it is done.
+# CIT470
+# Instructor: Darci Guriel
+# Team: 5
+# Membership: John Laycock, Jonathan Gaskill, Even Brodbeck
+# Author: John Laycock
+
+#Creating standard help file for -h option
+if [ "$1" == "-h" ]; then echo "Usage: $(basename "$0") [Installs and modifies NFS server for authentication. Script can be launched with: ./install-nfs-server]" ; exit 0 ; fi
+
+#Create primary partition
+fdisk /dev/sda <<EOF
+n
+p
+
+
+w
+EOF
+partprobe /dev/sda
+
+#Formating partition to XFS
+mkfs.xfs /dev/sda4 -f
+xfs_repair /dev/sda4
+mount /dev/sda4 /home 
+echo "/dev/sda4        /home    xfs    defaults    0 0" >> /etc/fstab
+
+# Start installing nfs-utils
+echo "Starting Network File System Install."
+yum -y install nfs-utils
+
+#Editing exports file to allow access for workstations 
+echo "/home 10.2.6.0/24(rw,sync,no_root_squash,no_all_squash)" >> /etc/exports 
+exportfs -a
+
+# Starting/enabling services
+systemctl enable rpcbind nfs-server nfs-lock nfs-idmap firewalld
+systemctl start rpcbind nfs-server nfs-lock nfs-idmap firewalld
+
+#Add firewall rules for NFS
+firewall-cmd --permanent --zone=public --add-service=nfs
+firewall-cmd --permanent --zone=public --add-service=mountd
+firewall-cmd --permanent --zone=public --add-service=rpc-bind
+firewall-cmd --reload
+
+#report
+echo "Network File System Installed, Configured, and Restarted."
